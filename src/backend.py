@@ -1,4 +1,5 @@
 import os
+import time
 import google.generativeai as genai
 from pypdf import PdfWriter
 from src.models import ExtractionResult, PaperExtraction
@@ -22,113 +23,157 @@ def merge_pdfs(main_pdf_path: str, supp_pdf_path: str | None, output_path: str) 
     return output_path
 
 def extract_catalytic_data(pdf_path: str, mime_type="application/pdf") -> ExtractionResult:
+    """
+    Extrae datos catalíticos de un PDF usando Gemini.
+    Incluye manejo robusto de recursos y errores.
+    """
     # 1. Cargar archivo
     print(f"Subiendo archivo {pdf_path} a Gemini...")
     file_ref = genai.upload_file(pdf_path, mime_type=mime_type)
     print(f"Archivo subido: {file_ref.name}")
     
-    # 2. Configurar el modelo con el esquema Pydantic
-    generation_config = {
-        "temperature": 0.0, # Determinístico
-        "response_mime_type": "application/json",
-        "response_schema": ExtractionResult
-    }
+    try:
+        # 2. Esperar a que el archivo esté procesado (para archivos grandes)
+        while file_ref.state.name == "PROCESSING":
+            print("Procesando archivo en servidor...")
+            time.sleep(2)
+            file_ref = genai.get_file(file_ref.name)
+
+        if file_ref.state.name == "FAILED":
+            raise ValueError("Falló el procesamiento del archivo en Gemini.")
+        
+        # 3. Configurar el modelo con el esquema Pydantic
+        generation_config = {
+            "temperature": 0.0, # Determinístico
+            "response_mime_type": "application/json",
+            "response_schema": ExtractionResult
+        }
+        
+        model = genai.GenerativeModel(
+            model_name="gemini-2.5-pro-preview-06-05", # Gemini 3 Pro (latest preview)
+            generation_config=generation_config
+        )
+
+        # 4. NUEVO PROMPT ADAPTADO - Métricas Flexibles
+        system_prompt = """
+        ROL: Auditor Científico Senior para base de datos de ingeniería de enzimas.
+        
+        OBJETIVO: Extraer datos de actividad catalítica, expresión y estabilidad térmica (Tm).
+        
+        INSTRUCCIONES CRÍTICAS SOBRE MÉTRICAS CINÉTICAS:
+        Los papers reportan actividad de muchas formas. Debes extraer TODAS las que encuentres para cada experimento:
+        - Si reportan kcat y KM, extrae ambos como items separados en `reported_metrics`.
+        - Si reportan concentración de producto (mM) o conversión (%), extráelo.
+        - Si reportan Actividad Específica (U/mg), extráelo.
+        - NO calcules ni conviertas unidades. Extrae el valor y la unidad TAL CUAL aparecen.
+        - Usa el campo `type` para clasificar: 'kcat', 'Km', 'Vmax', 'SpecificActivity', 'ProductConcentration', 'Conversion', 'HalfLife', 'Other'.
+        
+        INSTRUCCIONES SOBRE SUSTRATOS:
+        - Es VITAL identificar la morfología del sustrato (polvo, film, pastilla) usando `substrate_morphology`.
+        - Si se menciona la cristalinidad (%), extráela en `substrate_crystallinity_pct`. Esto afecta la degradación de PET.
+        
+        INSTRUCCIONES SOBRE EXPRESIÓN Y TM:
+        - Expresión: Busca valores en mg/mL (fracción soluble).
+        - Tm: Busca valores de 'Melting Temperature' o Tm, frecuentemente medidos por DSF (Differential Scanning Fluorimetry).
+        
+        REGLA DE ORO DE EVIDENCIA:
+        - Todo dato debe tener su 'raw_text_snippet' copiado LITERALMENTE del PDF.
+        - Incluye el número de página y tipo de fuente (Table, Figure, Text).
+        """
+
+        # 5. Ejecutar extracción
+        print("Iniciando extracción forense con Gemini...")
+        response = model.generate_content([file_ref, system_prompt])
+        
+        # 6. Validar respuesta
+        if not response.parts:
+            feedback = getattr(response, 'prompt_feedback', 'Sin información adicional')
+            raise ValueError(f"Gemini bloqueó la respuesta. Razón: {feedback}")
+
+        if not response.parsed:
+            raise ValueError("El modelo no devolvió un JSON válido compatible con el esquema.")
+
+        return response.parsed
     
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro", # Usando 1.5 Pro a petición del usuario para mejor handling
-        generation_config=generation_config
-    )
-
-    # 3. Prompt de Sistema "Forensic Auditor"
-    system_prompt = """
-    ROL: Eres un auditor forense de datos científicos y experto en ingeniería de proteínas. Tu misión NO es solo extraer números, sino construir un CASO DE EVIDENCIA irrefutable.
-
-    OBJETIVO: Extraer datos cinéticos para un torneo de biotecnología, con TRAZABILIDAD TOTAL.
-
-    REGLAS DE EVIDENCIA (CRÍTICO - SI FALLAS AQUÍ, EL DATO SE DESCARTA):
-    1. Para cada medición de actividad (`ActivityExperiment`), DEBES proporcionar la `evidence` completa.
-    2. `raw_text_snippet`: Copia y pega EXACTAMENTE el fragmento de texto o la fila de la tabla de donde sacaste el número. Esto se usará para búsqueda automática (Ctrl+F), así que sé literal.
-    3. `page_number`: Indica la página del PDF donde está el dato.
-    4. `confidence_score`: Evalúa tu certeza (0.0 - 1.0). Si tuviste que asumir algo (ej. temperatura ambiente = 25C), baja el score.
-
-    REGLAS DE EXTRACCIÓN JERÁRQUICA:
-    1. ENZIMA (Nivel Superior):
-       - Identifica variantes.
-       - SECUENCIAS: Busca en Material Suplementario. Si dice "Mutante X", reconstruye la secuencia si es posible con certeza.
-
-    2. ACTIVIDAD (Nivel Inferior):
-       - Busca valores `mM product / mg enzyme`.
-       - Separa claramente por tiempo (2h, 24h, etc.).
-       - Si el sustrato es PET, especifica si es polvo, film, etc.
-
-    3. EXPRESIÓN Y Tm:
-       - Datos intrínsecos de la variante. Prioriza DSF para Tm.
-
-    ¡SÉ UN AUDITOR EXTRICTO!
-    """
-
-    # 4. Ejecutar
-    print("Iniciando extracción forense con Gemini...")
-    response = model.generate_content([file_ref, system_prompt])
-    
-    return response.parsed
+    finally:
+        # SIEMPRE borrar el archivo remoto, incluso si hay error
+        print(f"Eliminando archivo remoto: {file_ref.name}")
+        try:
+            file_ref.delete()
+        except Exception as e:
+            print(f"Advertencia: No se pudo eliminar el archivo remoto: {e}")
 
 def flatten_data_to_csv(extraction_result: PaperExtraction) -> pd.DataFrame:
+    """
+    Aplana los datos jerárquicos a formato CSV.
+    Genera formato "Wide" donde cada tipo de métrica es una columna separada.
+    Esto coincide con el formato de activity_2025.csv.
+    """
     rows = []
     
     if not extraction_result.variants:
         return pd.DataFrame()
 
-    # Iteramos por cada enzima encontrada en el paper
     for variant in extraction_result.variants:
-        
-        # Datos comunes para todas las filas de esta enzima
+        # Datos fijos de la enzima (coincide con tm_expression_2025.csv)
         common_data = {
             "sample_id": variant.sample_id,
-            "seq_aa": variant.seq_aa,      # Se extrae una vez, se usa muchas veces
-            "seq_nuc": variant.seq_nuc,    # Se extrae una vez, se usa muchas veces
+            "seq_aa": variant.seq_aa,
+            "seq_nuc": variant.seq_nuc,
             "expression_mg_ml": variant.expression_mg_ml,
             "tm_c": variant.tm_c
         }
         
-        # Iteramos por cada medición individual (2h, 24h, pH 7, pH 8...)
-        for measurement in variant.measurements:
-            # Creamos una fila combinando datos comunes + datos específicos
+        for meas in variant.measurements:
             row = common_data.copy()
             
-            # Extract Evidence details
-            evidence_data = {
-                "snippet": measurement.evidence.raw_text_snippet,
-                "page": measurement.evidence.page_number,
-                "confidence": measurement.evidence.confidence_score
-            }
-
+            # Metadatos del experimento (coincide con activity_2025.csv)
             row.update({
-                "time_h": measurement.time_h,
-                "temperature_c": measurement.temperature_c,
-                "pH": measurement.ph,
-                "substrate": measurement.substrate,
-                "mM_product": measurement.mM_product,
-                "mM_product_per_mg_enzyme": measurement.mM_product_per_mg_enzyme,
-                "well": measurement.well_id,
-                **evidence_data # Flatten evidence into the row
+                "time_h": meas.time_h,
+                "temperature_c": meas.temperature_c,
+                "pH": meas.ph,
+                "substrate": meas.substrate_name,
+                "substrate_morphology": meas.substrate_morphology,
+                "crystallinity_pct": meas.substrate_crystallinity_pct,
+                
+                # Evidencia para trazabilidad
+                "evidence_page": meas.evidence.page_number,
+                "evidence_confidence": meas.evidence.confidence_score,
+                "evidence_snippet": meas.evidence.raw_text_snippet
             })
+
+            # --- LÓGICA DE PIVOTE PARA FORMATO "WIDE" ---
+            # Cada métrica encontrada se convierte en su propia columna
+            for metric in meas.reported_metrics:
+                col_name = metric.type
+                row[col_name] = metric.value
+                row[f"{col_name}_unit"] = metric.unit
+                if metric.standard_deviation:
+                    row[f"{col_name}_std"] = metric.standard_deviation
+                
             rows.append(row)
             
     # Crear DataFrame
     df = pd.DataFrame(rows)
     
-    # Reordenar columnas sugeridas
-    column_order = [
-        "sample_id", "time_h", "substrate", "temperature_c", "pH", 
-        "well", "mM_product", "mM_product_per_mg_enzyme", 
-        "seq_aa", "seq_nuc", "expression_mg_ml", "tm_c", 
-        "confidence", "page", "snippet" 
+    # Reordenar columnas: Datos base primero, luego métricas dinámicas
+    desired_order = [
+        "sample_id", "time_h", "substrate", "substrate_morphology", "crystallinity_pct",
+        "temperature_c", "pH",
+        # Métricas comunes (si existen)
+        "ProductConcentration", "ProductConcentration_unit",
+        "SpecificActivity", "SpecificActivity_unit",
+        "kcat", "kcat_unit", "Km", "Km_unit",
+        "Conversion", "Conversion_unit",
+        # Datos de enzima
+        "expression_mg_ml", "tm_c",
+        "seq_aa", "seq_nuc",
+        # Trazabilidad al final
+        "evidence_page", "evidence_confidence", "evidence_snippet"
     ]
     
-    # Aseguramos que existan las columnas
-    for col in column_order:
-        if col not in df.columns:
-            df[col] = None
-            
-    return df[column_order]
+    # Filtramos para usar solo las columnas que realmente existen + las nuevas que no previmos
+    final_cols = [c for c in desired_order if c in df.columns] + [c for c in df.columns if c not in desired_order]
+    
+    return df[final_cols]
+

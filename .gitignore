@@ -1,6 +1,27 @@
+# Virtual environments
 .venv/
 venv/
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+
+# Environment variables
 .env
+
+# OS artifacts
 .DS_Store
+Thumbs.db
+
+# Streamlit cache
+.streamlit/
+
+# Temp files (created by the app)
+*.tmp
+temp_*.pdf
+
+# IDE
+.idea/
+.vscode/
+*.swp

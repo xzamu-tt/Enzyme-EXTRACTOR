@@ -1,51 +1,58 @@
-import typing_extensions as typing
+# src/models.py
+
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 
-# --- Nivel 0: Evidencia Forense ---
+# --- Nivel 0: Evidencia ---
 class Evidence(BaseModel):
-    raw_text_snippet: str = Field(..., description="El texto exacto o fila de la tabla de donde se extrajo el dato. COPIAR Y PEGAR LITERAL.")
-    page_number: int = Field(..., description="Número de página del PDF donde se encuentra esta evidencia.")
-    location_type: str = Field(..., description="Tipo de fuente visual: 'Table', 'Figure', 'TextParagraph', 'SupplementaryTable'")
-    confidence_score: float = Field(..., description="Nivel de confianza (0.0 a 1.0) de que este dato es correcto.")
+    raw_text_snippet: str = Field(..., description="Texto exacto o fila de tabla. COPIAR LITERAL.")
+    page_number: int = Field(..., description="Página del PDF.")
+    location_type: str = Field(..., description="Ej: 'Table 1', 'Figure 3', 'Results Text'.")
+    confidence_score: float = Field(..., description="Certeza (0.0 - 1.0).")
 
-# --- Nivel 1: La Medición Individual (Lo que será una fila) ---
+# --- Nivel 0.5: Parámetro Cinético Genérico ---
+# Esto soluciona el requisito de "manejar todas las formas de reporte" (kcat, KM, etc.)
+class KineticParameter(BaseModel):
+    type: Literal['kcat', 'Km', 'Vmax', 'SpecificActivity', 'ProductConcentration', 'Conversion', 'HalfLife', 'Other'] = Field(..., description="Tipo de parámetro cinético reportado.")
+    value: float = Field(..., description="Valor numérico.")
+    unit: str = Field(..., description="Unidad reportada (ej: 'min-1', 'mM', 'U/mg', '%').")
+    standard_deviation: Optional[float] = Field(None, description="Desviación estándar si se reporta.")
+
+# --- Nivel 1: El Experimento ---
 class ActivityExperiment(BaseModel):
-    time_h: float = Field(..., description="Tiempo de reacción: 2, 24, 48, etc.")
-    temperature_c: float = Field(..., description="Temperatura del ensayo en Celsius")
-    ph: float = Field(..., description="pH del buffer utilizado")
-    substrate: str = Field(..., description="Nombre exacto del sustrato (ej. 'PET powder', 'aFilm')")
+    # Condiciones Experimentales
+    time_h: Optional[float] = Field(None, description="Duración del ensayo en horas.")
+    temperature_c: float = Field(..., description="Temperatura en Celsius.")
+    ph: float = Field(..., description="pH del buffer.")
     
-    # El valor crítico
-    mM_product: float = Field(..., description="Concentración de producto en mM")
-    mM_product_per_mg_enzyme: float = Field(..., description="Actividad normalizada (mM prod / mg enzima)")
-    
-    # Metadatos de la medición
-    well_id: Optional[str] = Field(None, description="Si se menciona el pocillo (ej. 'A1', 'H12')")
-    replicate_id: Optional[int] = Field(None, description="Número de réplica si aplica")
-    
-    # Evidencia Forense (Obligatoria)
-    evidence: Evidence = Field(..., description="La prueba forense de dónde salió este dato específico.")
+    # Metadatos del Sustrato (Crítico según el email)
+    substrate_name: str = Field(..., description="Nombre del sustrato (ej. 'PET').")
+    substrate_morphology: Optional[str] = Field(None, description="Forma física: 'film', 'powder', 'nanoparticles', 'coupon'. Importante por la cristalinidad.")
+    substrate_crystallinity_pct: Optional[float] = Field(None, description="Porcentaje de cristalinidad si se menciona.")
 
-# --- Nivel 2: La Enzima (El contenedor) ---
+    # Lista flexible de resultados
+    reported_metrics: List[KineticParameter] = Field(..., description="Lista de todos los valores cinéticos reportados para este experimento.")
+    
+    evidence: Evidence
+
+# --- Nivel 2: La Enzima ---
 class EnzymeVariant(BaseModel):
-    sample_id: str = Field(..., description="ID de la muestra o nombre de la variante (ej. 'LCC_ICCG')")
+    sample_id: str = Field(..., description="Nombre/ID de la variante (ej. 'LCC_ICCG').")
     
-    # SECUENCIAS (Obligatorias según tu indicación)
-    seq_aa: str = Field(..., description="Secuencia completa de AMINOÁCIDOS")
-    seq_nuc: Optional[str] = Field(None, description="Secuencia de NUCLEÓTIDOS (ADN) codificante")
+    # Secuencias
+    seq_aa: str = Field(..., description="Secuencia de aminoácidos.")
+    seq_nuc: Optional[str] = Field(None, description="Secuencia de nucleótidos.")
     
-    # Datos de expresión y estabilidad (se repiten para la misma enzima)
-    expression_mg_ml: Optional[float] = Field(None, description="Concentración de expresión (mg/mL)")
-    tm_c: Optional[float] = Field(None, description="Temperatura de fusión (Tm)")
+    # Expresión y Estabilidad (Tm)
+    expression_mg_ml: Optional[float] = Field(None, description="Expresión soluble en mg/mL.")
+    tm_c: Optional[float] = Field(None, description="Temperatura de fusión (Tm) medida idealmente por DSF.")
     
-    # Lista de experimentos (Aquí está la magia para luego aplanar)
-    measurements: List[ActivityExperiment] = Field(..., description="Lista de todas las mediciones hechas con esta enzima")
+    measurements: List[ActivityExperiment]
 
-# --- Nivel 3: El Resultado del Paper ---
-class PaperExtraction(BaseModel):
-    paper_doi: Optional[str] = Field(None, description="DOI del paper")
+# --- Nivel 3: Resultado Final ---
+class ExtractionResult(BaseModel):
+    paper_doi: Optional[str] = Field(None, description="DOI del paper.")
     variants: List[EnzymeVariant]
 
-# Backward compatibility alias or just reuse PaperExtraction as the main result
-ExtractionResult = PaperExtraction
+# Alias for compatibility
+PaperExtraction = ExtractionResult
