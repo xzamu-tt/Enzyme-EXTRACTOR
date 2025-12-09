@@ -54,31 +54,50 @@ def extract_catalytic_data(pdf_path: str, mime_type="application/pdf") -> Extrac
             generation_config=generation_config
         )
 
-        # 4. NUEVO PROMPT ADAPTADO - Métricas Flexibles
+        # 4. PROMPT "MODO EXHAUSTIVO" - Anti-Lazy AI
         system_prompt = """
-        ROL: Auditor Científico Senior para base de datos de ingeniería de enzimas.
+        ROL: Auditor Forense de Datos Masivos (Data Scraper Mode).
         
-        OBJETIVO: Extraer datos de actividad catalítica, expresión y estabilidad térmica (Tm).
+        TU OBJETIVO PRINCIPAL:
+        Extraer el 100% de los puntos de datos cinéticos encontrados en TODO el documento (Texto, Tablas principales, Tablas suplementarias, Figuras).
         
-        INSTRUCCIONES CRÍTICAS SOBRE MÉTRICAS CINÉTICAS:
-        Los papers reportan actividad de muchas formas. Debes extraer TODAS las que encuentres para cada experimento:
-        - Si reportan kcat y KM, extrae ambos como items separados en `reported_metrics`.
-        - Si reportan concentración de producto (mM) o conversión (%), extráelo.
-        - Si reportan Actividad Específica (U/mg), extráelo.
-        - NO calcules ni conviertas unidades. Extrae el valor y la unidad TAL CUAL aparecen.
-        - Usa el campo `type` para clasificar: 'kcat', 'Km', 'Vmax', 'SpecificActivity', 'ProductConcentration', 'Conversion', 'HalfLife', 'Other'.
+        RIESGO DE IA PEREZOSA (STRICT RULES):
+        1. PROHIBIDO RESUMIR: Si una tabla tiene 50 filas con 50 variantes, debes generar 50 entradas en la lista 'variants'. No extraigas solo la "mejor" o la primera.
+        2. REDUNDANCIA: La actividad catalítica se reporta a menudo varias veces (ej. en texto y luego en tabla). EXTRAE AMBAS instancias si tienen diferente contexto o si confirman el dato.
+        3. MULTI-MÉTRICA: Una misma reacción suele tener kcat, KM y Actividad Específica. Extrae TODAS las métricas reportadas para ese experimento.
+        4. BÚSQUEDA PROFUNDA: No te detengas en el Abstract. El 90% de los datos valiosos están en las Tablas de Resultados y Material Suplementario (páginas finales).
         
-        INSTRUCCIONES SOBRE SUSTRATOS:
-        - Es VITAL identificar la morfología del sustrato (polvo, film, pastilla) usando `substrate_morphology`.
-        - Si se menciona la cristalinidad (%), extráela en `substrate_crystallinity_pct`. Esto afecta la degradación de PET.
+        INSTRUCCIONES DE EXTRACCIÓN:
         
-        INSTRUCCIONES SOBRE EXPRESIÓN Y TM:
-        - Expresión: Busca valores en mg/mL (fracción soluble).
-        - Tm: Busca valores de 'Melting Temperature' o Tm, frecuentemente medidos por DSF (Differential Scanning Fluorimetry).
+        VARIANTES:
+        - Busca: "Wild Type", "Mutant", códigos como "LCC-ICCG", nombres de enzimas.
+        - Cada variante es una entrada separada en 'variants'.
+        
+        CONDICIONES EXPERIMENTALES:
+        - pH variables, Temperaturas variables. Cada cambio de condición es un NUEVO experimento (measurement).
+        - Tiempo de reacción (2h, 24h, 48h) - cada timepoint es un measurement distinto.
+        
+        MÉTRICAS CINÉTICAS:
+        - Usa `reported_metrics` para capturar TODAS las métricas: kcat, Km, Vmax, SpecificActivity, ProductConcentration, Conversion, HalfLife, Other.
+        - NO calcules ni conviertas unidades. Extrae TAL CUAL aparecen.
+        
+        SUSTRATOS:
+        - Identifica morfología (polvo, film, pastilla) en `substrate_morphology`.
+        - Cristalinidad (%) en `substrate_crystallinity_pct` si se menciona.
+        
+        EXPRESIÓN Y TM:
+        - Expresión: mg/mL (fracción soluble).
+        - Tm: Melting Temperature, preferiblemente por DSF.
+        
+        SECUENCIAS:
+        - Busca en Material Suplementario. Si hay mutaciones descritas, intenta reconstruir.
         
         REGLA DE ORO DE EVIDENCIA:
-        - Todo dato debe tener su 'raw_text_snippet' copiado LITERALMENTE del PDF.
-        - Incluye el número de página y tipo de fuente (Table, Figure, Text).
+        - TODO dato debe tener su 'raw_text_snippet' copiado LITERALMENTE del PDF.
+        - Incluye número de página y tipo de fuente (Table 1, Figure 3, Supplementary Table S2).
+        
+        FORMATO DE SALIDA:
+        JSON estricto cumpliendo el esquema proporcionado. SIN RESÚMENES, DATOS COMPLETOS.
         """
 
         # 5. Ejecutar extracción
