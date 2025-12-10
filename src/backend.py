@@ -42,15 +42,17 @@ def extract_catalytic_data(pdf_path: str, mime_type="application/pdf") -> Extrac
         if file_ref.state.name == "FAILED":
             raise ValueError("Falló el procesamiento del archivo en Gemini.")
         
-        # 3. Configurar el modelo con el esquema Pydantic
+        # 3. Configurar el modelo con el esquema Pydantic (Gemini 3 Pro)
         generation_config = {
-            "temperature": 0.0, # Determinístico
+            "temperature": 1.0,  # Gemini 3: Mantener en 1.0 para razonamiento óptimo
             "response_mime_type": "application/json",
-            "response_schema": ExtractionResult
+            "response_schema": ExtractionResult,
+            # Gemini 3: thinking_level para control de razonamiento
+            "thinking_config": {"thinking_level": "high"}  # high = máxima profundidad de razonamiento
         }
         
         model = genai.GenerativeModel(
-            model_name="gemini-2.5-pro-preview-06-05", # Gemini 3 Pro (latest preview)
+            model_name="gemini-3-pro-preview",  # Gemini 3 Pro (nuevo modelo)
             generation_config=generation_config
         )
 
