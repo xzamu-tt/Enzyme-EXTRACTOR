@@ -103,12 +103,13 @@ def extract_catalytic_data(file_paths: list) -> ExtractionResult:
         4. Evidencia Visual (Imágenes de geles, gráficos)
 
         TU MISIÓN:
-        Analizar TODO el conjunto y extraer datos de actividad enzimática.
+        Analizar TODO el conjunto y extraer datos de actividad enzimática CON METADATOS COMPLETOS para normalización.
 
         REGLAS ESTRICTAS:
         1. PROHIBIDO RESUMIR: Extrae TODAS las variantes.
         2. MULTI-FUENTE: Cruza información entre PDF y Excel.
         3. BÚSQUEDA PROFUNDA: Revisa TODOS los archivos.
+        4. METADATOS CRÍTICOS: Sin volumen de reacción, carga de enzima y cantidad de sustrato, los datos no se pueden comparar.
 
         FORMATO DE SALIDA - JSON EXACTO:
         {
@@ -116,21 +117,34 @@ def extract_catalytic_data(file_paths: list) -> ExtractionResult:
           "variants": [
             {
               "sample_id": "Nombre de la variante (ej: LCC-ICCG, Wild Type)",
-              "seq_aa": "Secuencia de aminoácidos si está disponible, sino string vacío",
+              "seq_aa": "Secuencia de aminoácidos o null",
               "seq_nuc": "Secuencia nucleótidos o null",
-              "expression_mg_ml": 1.5 o null,
+              "expression_value": 1.5 o null,
+              "expression_unit": "mg/mL, mg/L, g/L, µg/mL o null",
               "tm_c": 65.0 o null,
               "measurements": [
                 {
                   "time_h": 24.0 o null,
-                  "temperature_c": 37.0,
-                  "ph": 7.5,
-                  "substrate_name": "PET",
+                  "temperature_c": 37.0 o null,
+                  "ph": 7.5 o null,
+                  
+                  "reaction_volume_ml": 1.0 o null,
+                  
+                  "enzyme_loading_value": 0.5 o null,
+                  "enzyme_loading_unit": "mg/mL, nM, µM, mg enzyme/g PET, etc. o null",
+                  
+                  "substrate_name": "PET o null",
                   "substrate_morphology": "film, powder, etc. o null",
                   "substrate_crystallinity_pct": 30.0 o null,
+                  "substrate_amount_value": 10.0 o null,
+                  "substrate_amount_unit": "mg, g, mg/mL, etc. o null",
+                  
+                  "product_yield_raw": "DATO CRUDO TAL CUAL: ej '15.2 µg/mg PET', '45% conversion', '2.3 mM TPA'",
+                  "product_yield_unit": "La unidad si se puede separar o null",
+                  
                   "reported_metrics": [
                     {
-                      "type": "kcat, Km, ProductConcentration, SpecificActivity, Conversion, etc.",
+                      "type": "kcat, Km, Vmax, SpecificActivity, Conversion, HalfLife, Other",
                       "value": 10.5,
                       "unit": "s-1, mM, %, etc.",
                       "standard_deviation": 0.5 o null
@@ -149,10 +163,11 @@ def extract_catalytic_data(file_paths: list) -> ExtractionResult:
         }
 
         INSTRUCCIONES ADICIONALES:
-        - Para campos numéricos opcionales: usa null si no hay dato.
-        - Para strings opcionales: usa null o "" si no hay dato.
-        - Copia raw_text_snippet LITERALMENTE del documento.
-        - Si el dato viene de Excel, indica el nombre del archivo y celda.
+        - PRODUCT YIELD: Copia el dato de producto/yield EXACTAMENTE como aparece (ej: "15.2 µg/mg PET", "45% conversion").
+        - EXPRESIÓN: Busca en CUALQUIER unidad (mg/mL, mg/L, g/L).
+        - CARGA DE ENZIMA: Busca "enzyme loading", "enzyme concentration".
+        - CANTIDAD DE SUSTRATO: Busca cantidades en mg o g.
+        - VOLUMEN: Busca "reaction volume", valores en mL.
         
         RESPONDE SOLO CON EL JSON, SIN TEXTO ADICIONAL.
         """
@@ -216,7 +231,8 @@ def flatten_data_to_csv(extraction_result: PaperExtraction) -> pd.DataFrame:
             "sample_id": variant.sample_id,
             "seq_aa": variant.seq_aa,
             "seq_nuc": variant.seq_nuc,
-            "expression_mg_ml": variant.expression_mg_ml,
+            "expression_value": variant.expression_value,
+            "expression_unit": variant.expression_unit,
             "tm_c": variant.tm_c
         }
         
@@ -227,9 +243,24 @@ def flatten_data_to_csv(extraction_result: PaperExtraction) -> pd.DataFrame:
                 "time_h": meas.time_h,
                 "temperature_c": meas.temperature_c,
                 "pH": meas.ph,
+                
+                # Metadatos para normalización
+                "reaction_volume_ml": meas.reaction_volume_ml,
+                "enzyme_loading_value": meas.enzyme_loading_value,
+                "enzyme_loading_unit": meas.enzyme_loading_unit,
+                
+                # Sustrato
                 "substrate": meas.substrate_name,
                 "substrate_morphology": meas.substrate_morphology,
                 "crystallinity_pct": meas.substrate_crystallinity_pct,
+                "substrate_amount_value": meas.substrate_amount_value,
+                "substrate_amount_unit": meas.substrate_amount_unit,
+                
+                # Product Yield crudo
+                "product_yield_raw": meas.product_yield_raw,
+                "product_yield_unit": meas.product_yield_unit,
+                
+                # Evidencia
                 "evidence_page": meas.evidence.page_number,
                 "evidence_confidence": meas.evidence.confidence_score,
                 "evidence_snippet": meas.evidence.raw_text_snippet,

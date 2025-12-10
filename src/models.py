@@ -19,18 +19,33 @@ class KineticParameter(BaseModel):
 
 # --- Nivel 1: El Experimento ---
 class ActivityExperiment(BaseModel):
-    # Condiciones Experimentales - AHORA OPCIONALES (muchos papers no las reportan)
+    # Condiciones Experimentales
     time_h: Optional[float] = Field(default=None, description="Duración del ensayo en horas.")
     temperature_c: Optional[float] = Field(default=None, description="Temperatura en Celsius.")
     ph: Optional[float] = Field(default=None, description="pH del buffer.")
+    
+    # NUEVOS METADATOS PARA NORMALIZACIÓN
+    reaction_volume_ml: Optional[float] = Field(default=None, description="Volumen de reacción en mL.")
+    
+    # Carga de enzima (valor + unidad)
+    enzyme_loading_value: Optional[float] = Field(default=None, description="Cantidad de enzima cargada.")
+    enzyme_loading_unit: Optional[str] = Field(default=None, description="Unidad: 'mg/mL', 'nM', 'µM', 'mg enzyme/g PET', etc.")
     
     # Metadatos del Sustrato
     substrate_name: Optional[str] = Field(default=None, description="Nombre del sustrato (ej. 'PET').")
     substrate_morphology: Optional[str] = Field(default=None, description="Forma física: 'film', 'powder', etc.")
     substrate_crystallinity_pct: Optional[float] = Field(default=None, description="Porcentaje de cristalinidad.")
+    
+    # Cantidad de sustrato (valor + unidad)
+    substrate_amount_value: Optional[float] = Field(default=None, description="Cantidad inicial de sustrato.")
+    substrate_amount_unit: Optional[str] = Field(default=None, description="Unidad: 'mg', 'g', 'mg/mL', etc.")
 
-    # Lista flexible de resultados
-    reported_metrics: List[KineticParameter] = Field(description="Lista de valores cinéticos reportados.")
+    # PRODUCTO/YIELD CRUDO - TAL CUAL SE REPORTA
+    product_yield_raw: Optional[str] = Field(default=None, description="El dato de producto/yield EXACTAMENTE como aparece en el artículo (ej: '15.2 µg/mg PET', '45% conversion', '2.3 mM TPA').")
+    product_yield_unit: Optional[str] = Field(default=None, description="La unidad del yield si se puede separar.")
+
+    # Lista flexible de otros resultados cinéticos
+    reported_metrics: List[KineticParameter] = Field(description="Lista de valores cinéticos reportados (kcat, Km, etc.).")
     
     evidence: Evidence = Field(description="Evidencia forense del dato.")
 
@@ -38,13 +53,16 @@ class ActivityExperiment(BaseModel):
 class EnzymeVariant(BaseModel):
     sample_id: str = Field(description="Nombre/ID de la variante (ej. 'LCC-ICCG').")
     
-    # Secuencias - OPCIONALES (no todos los papers las tienen)
+    # Secuencias
     seq_aa: Optional[str] = Field(default=None, description="Secuencia de aminoácidos.")
     seq_nuc: Optional[str] = Field(default=None, description="Secuencia de nucleótidos.")
     
-    # Expresión y Estabilidad
-    expression_mg_ml: Optional[float] = Field(default=None, description="Expresión soluble en mg/mL.")
-    tm_c: Optional[float] = Field(default=None, description="Temperatura de fusión (Tm).")
+    # Expresión
+    expression_value: Optional[float] = Field(default=None, description="Valor numérico de expresión.")
+    expression_unit: Optional[str] = Field(default=None, description="Unidad: 'mg/mL', 'mg/L', 'g/L', etc.")
+    
+    # Estabilidad térmica
+    tm_c: Optional[float] = Field(default=None, description="Temperatura de fusión (Tm) en Celsius.")
     
     measurements: List[ActivityExperiment] = Field(description="Lista de mediciones de actividad.")
 
