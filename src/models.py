@@ -17,6 +17,15 @@ class KineticParameter(BaseModel):
     unit: str = Field(description="Unidad reportada (ej: 'min-1', 'mM', 'U/mg', '%').")
     standard_deviation: Optional[float] = Field(default=None, description="Desviación estándar si se reporta.")
 
+# --- NUEVO: Figura con datos no extraídos ---
+class UnextractedFigure(BaseModel):
+    figure_id: str = Field(description="Identificador de la figura (ej: 'Figure 1', 'Fig. S3').")
+    page_number: int = Field(description="Página donde aparece la figura.")
+    description: str = Field(description="Descripción breve de qué muestra la figura.")
+    data_type: str = Field(description="Tipo de datos: 'time_course', 'kinetic_curve', 'inhibition_curve', 'temperature_profile', 'pH_profile', 'other'.")
+    why_relevant: str = Field(description="Por qué es relevante para el estudio (ej: 'Contiene curva de degradación vs tiempo').")
+    estimated_datapoints: Optional[int] = Field(default=None, description="Número aproximado de puntos de datos en la gráfica.")
+
 # --- Nivel 1: El Experimento ---
 class ActivityExperiment(BaseModel):
     # Condiciones Experimentales
@@ -24,7 +33,7 @@ class ActivityExperiment(BaseModel):
     temperature_c: Optional[float] = Field(default=None, description="Temperatura en Celsius.")
     ph: Optional[float] = Field(default=None, description="pH del buffer.")
     
-    # NUEVOS METADATOS PARA NORMALIZACIÓN
+    # Metadatos para normalización
     reaction_volume_ml: Optional[float] = Field(default=None, description="Volumen de reacción en mL.")
     
     # Carga de enzima (valor + unidad)
@@ -40,12 +49,12 @@ class ActivityExperiment(BaseModel):
     substrate_amount_value: Optional[float] = Field(default=None, description="Cantidad inicial de sustrato.")
     substrate_amount_unit: Optional[str] = Field(default=None, description="Unidad: 'mg', 'g', 'mg/mL', etc.")
 
-    # PRODUCTO/YIELD CRUDO - TAL CUAL SE REPORTA
-    product_yield_raw: Optional[str] = Field(default=None, description="El dato de producto/yield EXACTAMENTE como aparece en el artículo (ej: '15.2 µg/mg PET', '45% conversion', '2.3 mM TPA').")
+    # PRODUCTO/YIELD CRUDO
+    product_yield_raw: Optional[str] = Field(default=None, description="El dato de producto/yield EXACTAMENTE como aparece.")
     product_yield_unit: Optional[str] = Field(default=None, description="La unidad del yield si se puede separar.")
 
-    # Lista flexible de otros resultados cinéticos (AHORA OPCIONAL)
-    reported_metrics: Optional[List[KineticParameter]] = Field(default=None, description="Lista de valores cinéticos reportados (kcat, Km, etc.).")
+    # Lista flexible de resultados cinéticos
+    reported_metrics: Optional[List[KineticParameter]] = Field(default=None, description="Lista de valores cinéticos (kcat, Km, etc.).")
     
     evidence: Evidence = Field(description="Evidencia forense del dato.")
 
@@ -70,6 +79,12 @@ class EnzymeVariant(BaseModel):
 class ExtractionResult(BaseModel):
     paper_doi: Optional[str] = Field(default=None, description="DOI del paper.")
     variants: List[EnzymeVariant] = Field(description="Lista de variantes enzimáticas encontradas.")
+    
+    # NUEVO: Figuras con datos relevantes NO extraídos
+    figures_requiring_digitization: Optional[List[UnextractedFigure]] = Field(
+        default=None, 
+        description="Lista de figuras/gráficos que contienen datos relevantes pero requieren digitalización manual."
+    )
 
 # Alias
 PaperExtraction = ExtractionResult

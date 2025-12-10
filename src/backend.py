@@ -159,15 +159,25 @@ def extract_catalytic_data(file_paths: list) -> ExtractionResult:
                 }
               ]
             }
+          ],
+          "figures_requiring_digitization": [
+            {
+              "figure_id": "Figure 1, Fig. S3, etc.",
+              "page_number": 3,
+              "description": "Curva de degradación de PET vs tiempo",
+              "data_type": "time_course, kinetic_curve, inhibition_curve, temperature_profile, pH_profile, other",
+              "why_relevant": "Contiene datos de actividad en múltiples tiempos no disponibles en tablas",
+              "estimated_datapoints": 10 o null
+            }
           ]
         }
 
         INSTRUCCIONES ADICIONALES:
-        - PRODUCT YIELD: Copia el dato de producto/yield EXACTAMENTE como aparece (ej: "15.2 µg/mg PET", "45% conversion").
-        - EXPRESIÓN: Busca en CUALQUIER unidad (mg/mL, mg/L, g/L).
+        - PRODUCT YIELD: Copia el dato EXACTAMENTE como aparece.
+        - EXPRESIÓN: Busca en CUALQUIER unidad.
         - CARGA DE ENZIMA: Busca "enzyme loading", "enzyme concentration".
-        - CANTIDAD DE SUSTRATO: Busca cantidades en mg o g.
-        - VOLUMEN: Busca "reaction volume", valores en mL.
+        - FIGURAS IMPORTANTES: Si ves gráficas con curvas de actividad, degradación vs tiempo, perfiles de temperatura/pH, o inhibición que contienen datos cuantitativos NO disponibles en tablas/texto, regístralas en "figures_requiring_digitization".
+        - NO intentes extraer puntos de datos de gráficas. Solo identifícalas para posterior digitalización manual.
         
         RESPONDE SOLO CON EL JSON, SIN TEXTO ADICIONAL.
         """

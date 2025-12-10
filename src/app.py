@@ -144,6 +144,19 @@ with tab1:
             
             csv = df_flat.to_csv(index=False).encode('utf-8')
             st.download_button("📄 Descargar CSV", data=csv, file_name="extraction.csv", mime="text/csv")
+            
+            # Mostrar figuras que requieren digitalización
+            result_data = st.session_state['data']
+            if result_data.get('figures_requiring_digitization'):
+                st.markdown("### 📊 Figuras que Requieren Digitalización Manual")
+                st.warning("Las siguientes figuras contienen datos relevantes que no pudieron extraerse automáticamente.")
+                for fig in result_data['figures_requiring_digitization']:
+                    with st.expander(f"📈 {fig['figure_id']} (Pág. {fig['page_number']})"):
+                        st.write(f"**Descripción:** {fig['description']}")
+                        st.write(f"**Tipo de datos:** {fig['data_type']}")
+                        st.write(f"**Relevancia:** {fig['why_relevant']}")
+                        if fig.get('estimated_datapoints'):
+                            st.write(f"**Puntos estimados:** ~{fig['estimated_datapoints']}")
 
 # ==========================================
 # TAB 2: MODO MASIVO MULTIMODAL
