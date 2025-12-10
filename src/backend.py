@@ -267,13 +267,14 @@ def flatten_data_to_csv(extraction_result: PaperExtraction) -> pd.DataFrame:
                 "evidence_location": meas.evidence.location_type
             })
 
-            # Pivote: Cada métrica es una columna
-            for metric in meas.reported_metrics:
-                col_name = metric.type
-                row[col_name] = metric.value
-                row[f"{col_name}_unit"] = metric.unit
-                if metric.standard_deviation:
-                    row[f"{col_name}_std"] = metric.standard_deviation
+            # Pivote: Cada métrica es una columna (si existe)
+            if meas.reported_metrics:
+                for metric in meas.reported_metrics:
+                    col_name = metric.type
+                    row[col_name] = metric.value
+                    row[f"{col_name}_unit"] = metric.unit
+                    if metric.standard_deviation:
+                        row[f"{col_name}_std"] = metric.standard_deviation
                 
             rows.append(row)
             

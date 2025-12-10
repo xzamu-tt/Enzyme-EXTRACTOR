@@ -44,8 +44,8 @@ class ActivityExperiment(BaseModel):
     product_yield_raw: Optional[str] = Field(default=None, description="El dato de producto/yield EXACTAMENTE como aparece en el artículo (ej: '15.2 µg/mg PET', '45% conversion', '2.3 mM TPA').")
     product_yield_unit: Optional[str] = Field(default=None, description="La unidad del yield si se puede separar.")
 
-    # Lista flexible de otros resultados cinéticos
-    reported_metrics: List[KineticParameter] = Field(description="Lista de valores cinéticos reportados (kcat, Km, etc.).")
+    # Lista flexible de otros resultados cinéticos (AHORA OPCIONAL)
+    reported_metrics: Optional[List[KineticParameter]] = Field(default=None, description="Lista de valores cinéticos reportados (kcat, Km, etc.).")
     
     evidence: Evidence = Field(description="Evidencia forense del dato.")
 
